@@ -2,8 +2,29 @@ import 'package:flutter/material.dart';
 import 'package:speech_to_text/speech_to_text.dart' as stt;
 import 'package:translator/translator.dart';
 import 'package:flutter_tts/flutter_tts.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:firebase_core/firebase_core.dart';
 
-void main() {
+// 🔥 Firebase Save Function (WITH DEBUG)
+Future<void> saveTranslation(String input, String output) async {
+  try {
+    print("🔥 Saving: $input -> $output");
+
+    await FirebaseFirestore.instance.collection('translations').add({
+      'input': input,
+      'output': output,
+      'timestamp': FieldValue.serverTimestamp(),
+    });
+
+    print("✅ Saved successfully!");
+  } catch (e) {
+    print("❌ Firebase Error: $e");
+  }
+}
+
+void main() async {
+  WidgetsFlutterBinding.ensureInitialized();
+  await Firebase.initializeApp();
   runApp(SpeakSmartApp());
 }
 
@@ -13,9 +34,7 @@ class SpeakSmartApp extends StatelessWidget {
     return MaterialApp(
       debugShowCheckedModeBanner: false,
       title: 'SpeakGlobeAI',
-      theme: ThemeData(
-        primarySwatch: Colors.deepPurple,
-      ),
+      theme: ThemeData(primarySwatch: Colors.deepPurple),
       home: VoiceScreen(),
     );
   }
@@ -44,46 +63,47 @@ class _VoiceScreenState extends State<VoiceScreen> {
   }
 
   void _initSpeech() async {
-    await _speech.initialize();
+    bool available = await _speech.initialize(
+      onStatus: (status) => print("STATUS: $status"),
+      onError: (error) => print("ERROR: $error"),
+    );
+    print("🎤 Speech available: $available");
   }
 
-  // 🔊 Initialize TTS
   void _initTTS() async {
     await _flutterTts.setLanguage("en-US");
     await _flutterTts.setPitch(1.0);
-    await _flutterTts.setSpeechRate(0.5);
+    await _flutterTts.setSpeechRate(0.35);
   }
 
-  // 🔊 Speak function
   Future speak(String text) async {
     if (text.isNotEmpty) {
       await _flutterTts.stop();
+      await Future.delayed(Duration(milliseconds: 200));
       await _flutterTts.speak(text);
     }
   }
 
   void _listen() async {
     if (!_isListening) {
-      bool available = await _speech.initialize(
-        onStatus: (status) {
-          print("STATUS: $status");
-        },
-        onError: (error) {
-          print("ERROR: $error");
-        },
-      );
+      bool available = await _speech.initialize();
 
       if (available) {
         setState(() => _isListening = true);
 
         _speech.listen(
           onResult: (result) async {
-            setState(() {
-              _text = result.recognizedWords;
-            });
+
+            if (result.recognizedWords.isNotEmpty) {
+              setState(() {
+                _text = result.recognizedWords;
+              });
+            }
 
             if (result.finalResult) {
-              _speech.stop(); // stop mic
+              print("🎯 Final speech: $_text");
+
+              await _speech.stop();
               setState(() => _isListening = false);
 
               try {
@@ -94,13 +114,16 @@ class _VoiceScreenState extends State<VoiceScreen> {
                   _translatedText = translation.text;
                 });
 
-                // 🔥 delay before speaking
-                Future.delayed(Duration(milliseconds: 300), () async {
-                  await speak(translation.text);
-                });
+                print("🌍 Translated: $_translatedText");
+
+                // ✅ DIRECT CALL (NO DELAY — more reliable)
+                await saveTranslation(_text, _translatedText);
+
+                // 🔊 Speak
+                await speak(_translatedText);
 
               } catch (e) {
-                print("Translation error: $e");
+                print("❌ Translation error: $e");
 
                 setState(() {
                   _translatedText = "⚠️ Network issue. Try again.";
@@ -109,10 +132,12 @@ class _VoiceScreenState extends State<VoiceScreen> {
             }
           },
         );
+      } else {
+        print("❌ Speech not available");
       }
     } else {
       setState(() => _isListening = false);
-      _speech.stop();
+      await _speech.stop();
     }
   }
 
@@ -123,52 +148,48 @@ class _VoiceScreenState extends State<VoiceScreen> {
         title: Text("SpeakGlobeAI"),
         centerTitle: true,
       ),
-      body: Padding(
-        padding: const EdgeInsets.all(20.0),
-        child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            // 🎤 ORIGINAL TEXT
-            Container(
-              padding: EdgeInsets.all(20),
-              width: double.infinity,
-              decoration: BoxDecoration(
-                border: Border.all(color: Colors.black26),
-                borderRadius: BorderRadius.circular(12),
+      body: SingleChildScrollView(
+        child: Padding(
+          padding: const EdgeInsets.all(20.0),
+          child: Column(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              Container(
+                padding: EdgeInsets.all(20),
+                width: double.infinity,
+                decoration: BoxDecoration(
+                  border: Border.all(color: Colors.black26),
+                  borderRadius: BorderRadius.circular(12),
+                ),
+                child: Text(_text, style: TextStyle(fontSize: 18)),
               ),
-              child: Text(
-                _text,
-                style: TextStyle(fontSize: 18),
+
+              SizedBox(height: 20),
+
+              Container(
+                padding: EdgeInsets.all(20),
+                width: double.infinity,
+                decoration: BoxDecoration(
+                  border: Border.all(color: Colors.green),
+                  borderRadius: BorderRadius.circular(12),
+                ),
+                child: Text(
+                  _translatedText.isEmpty
+                      ? "Translation will appear here"
+                      : _translatedText,
+                  style: TextStyle(fontSize: 18, color: Colors.green),
+                ),
               ),
-            ),
 
-            SizedBox(height: 20),
+              SizedBox(height: 30),
 
-            // 🌍 TRANSLATED TEXT
-            Container(
-              padding: EdgeInsets.all(20),
-              width: double.infinity,
-              decoration: BoxDecoration(
-                border: Border.all(color: Colors.green),
-                borderRadius: BorderRadius.circular(12),
+              ElevatedButton.icon(
+                onPressed: _listen,
+                icon: Icon(_isListening ? Icons.mic : Icons.mic_none),
+                label: Text(_isListening ? "Stop" : "Record Voice"),
               ),
-              child: Text(
-                _translatedText.isEmpty
-                    ? "Translation will appear here"
-                    : _translatedText,
-                style: TextStyle(fontSize: 18, color: Colors.green),
-              ),
-            ),
-
-            SizedBox(height: 30),
-
-            // 🎤 RECORD BUTTON
-            ElevatedButton.icon(
-              onPressed: _listen,
-              icon: Icon(_isListening ? Icons.mic : Icons.mic_none),
-              label: Text(_isListening ? "Stop" : "Record Voice"),
-            ),
-          ],
+            ],
+          ),
         ),
       ),
     );

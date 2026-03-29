@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "832207399785",
+    "project_id": "speaksmartai-6ed3c",
+    "storage_bucket": "speaksmartai-6ed3c.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:832207399785:android:99acbabe50d67b08346bf8",
+        "android_client_info": {
+          "package_name": "com.example.speaksmart_app"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyDy6I-FKNjP5UDMIDOZ0HTbQJiXpuO8GCI"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}
