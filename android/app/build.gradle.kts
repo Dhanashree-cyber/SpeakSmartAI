@@ -2,12 +2,13 @@ plugins {
     id("com.android.application")
     id("kotlin-android")
     id("dev.flutter.flutter-gradle-plugin")
-    id("com.google.gms.google-services") // ✅ ADDED (Firebase)
+    id("com.google.gms.google-services") // Firebase
 }
 
 android {
     namespace = "com.example.speaksmart_app"
-    compileSdk = flutter.compileSdkVersion
+    compileSdk = 36   // ✅ FIXED (was flutter.compileSdkVersion)
+
     ndkVersion = flutter.ndkVersion
 
     compileOptions {
@@ -16,15 +17,17 @@ android {
     }
 
     kotlinOptions {
-        jvmTarget = JavaVersion.VERSION_17.toString()
+        jvmTarget = "17"
     }
 
     defaultConfig {
         applicationId = "com.example.speaksmart_app"
-        minSdk = flutter.minSdkVersion
-        targetSdk = flutter.targetSdkVersion
+        minSdk = flutter.minSdkVersion   // ✅ IMPORTANT FIX (ML Kit requires 21+)
+        targetSdk = 36
         versionCode = flutter.versionCode
         versionName = flutter.versionName
+
+        multiDexEnabled = true   // ✅ REQUIRED
     }
 
     buildTypes {
@@ -32,6 +35,10 @@ android {
             signingConfig = signingConfigs.getByName("debug")
         }
     }
+}
+
+dependencies {
+    implementation("androidx.multidex:multidex:2.0.1") // ✅ REQUIRED
 }
 
 flutter {
